@@ -3,8 +3,7 @@ from transformers import AutoTokenizer
 
 m = 5000
 n = 50
-roberta_vocab_size = 50265
-codeberta_vocab_size = 52000
+vocab_size = 50000
 german = load_dataset("wikipedia", "20220301.de")
 java = load_dataset("code_search_net", "java")
 '''
@@ -33,7 +32,7 @@ java = load_dataset("code_search_net", "java")
     "huggingface/CodeBERTa-small-v1_Strategy1_30K_with_java",
     "huggingface/CodeBERTa-small-v1_Strategy1_40K_with_java",
     "huggingface/CodeBERTa-small-v1_Strategy1_50K_with_java",
-    "huggingface/CodeBERTa-small-v1_Strategy1_60K_with_java",
+    "huggingface/CodeBERTa-small-v1_wc_Strategy1_60K_with_java",
     "huggingface/CodeBERTa-small-v1_Strategy1_10K_with_en",
     "huggingface/CodeBERTa-small-v1_Strategy1_20K_with_en",
     "huggingface/CodeBERTa-small-v1_Strategy1_30K_with_en",
@@ -44,7 +43,7 @@ java = load_dataset("code_search_net", "java")
     "huggingface/CodeBERTa-small-v1_Strategy1_30K_with_java_and_en",
     "huggingface/CodeBERTa-small-v1_Strategy1_40K_with_java_and_en",
     "huggingface/CodeBERTa-small-v1_Strategy1_50K_with_java_and_en",
-    "huggingface/CodeBERTa-small-v1_Strategy1_60K_with_java",
+    "huggingface/CodeBERTa-small-v1_wc_Strategy1_60K_with_java",
     "huggingface/CodeBERTa-small-v1_Strategy1_60K_with_java_updated",
     "huggingface/CodeBERTa-small-v1_Strategy1_70K_with_java",
     "huggingface/CodeBERTa-small-v1_Strategy1_70K_with_java_updated",
@@ -60,31 +59,21 @@ java = load_dataset("code_search_net", "java")
     "CodeBERTa-small-v1_Strategy2_30K"
 """
 tokenizers = [
+    "huggingface/CodeBERTa-small-v1",
+    "deploy_tok_and_mod/CodeBERTa-small-v1_Strategy1_50K_with_java_updated_nc",
+    "deploy_tok_and_mod/CodeBERTa-small-v1_Strategy1_50K_with_java_updated_wc",
     "roberta/roberta-base",
-    "roberta/roberta-base_Strategy1_20K_with_java_and_en",
-    "roberta/roberta-base_Strategy1_30K_with_java_and_en",
-    "roberta/roberta-base_Strategy1_40K_with_java_and_en",
-    "roberta/roberta-base_Strategy1_50K_with_java_and_en",
-    "roberta/roberta-base_Strategy1_60K_with_java_and_en",
-    "roberta/roberta-base_Strategy1_20K_with_en",
-    "roberta/roberta-base_Strategy1_30K_with_en",
-    "roberta/roberta-base_Strategy1_40K_with_en",
-    "roberta/roberta-base_Strategy1_50K_with_en",
-    "roberta/roberta-base_Strategy1_60K_with_en",
-    "roberta/roberta-base_Strategy1_20K_with_java",
-    "roberta/roberta-base_Strategy1_30K_with_java",
-    "roberta/roberta-base_Strategy1_40K_with_java",
-    "roberta/roberta-base_Strategy1_50K_with_java",
-    "roberta/roberta-base_Strategy1_60K_with_java",
+    "deploy_tok_and_mod/roberta-base_Strategy1_50K_with_java_updated_nc",
+    "deploy_tok_and_mod/roberta-base_Strategy1_50K_with_java_updated_wc",
 ]
 
 output = ""
 for tokenizer in tokenizers:
     tok = AutoTokenizer.from_pretrained(tokenizer)
-    if tokenizer == "bert-base-german-cased":
-        roberta_vocab_size = 30000
-    if tokenizer == "xlm-roberta-base":
-        roberta_vocab_size = 250002
+    if "CodeBERTa" in tokenizer:
+        vocab_size = 52000
+    if "roberta" in tokenizer:
+        vocab_size = 50265
     tok_counter = 0
     code_tok_counter = 0
     code_tokens = 0
@@ -106,21 +95,21 @@ for tokenizer in tokenizers:
     for example in result:
         encoding = tok.encode(example, add_special_tokens=False)
         tok_counter += len(encoding)
-        base_token_german_counter += len([token for token in encoding if token < codeberta_vocab_size])
-        added_token_german_counter += len([token for token in encoding if token >= codeberta_vocab_size])
+        base_token_german_counter += len([token for token in encoding if token < vocab_size])
+        added_token_german_counter += len([token for token in encoding if token >= vocab_size])
 
     for example in java["train"][:m]["func_code_tokens"]:
         code_tokens += len(example)
         code = " ".join(example)
         encoding = tok.encode(code, add_special_tokens=False)
-        base_token_code_counter += len([token for token in encoding if token < codeberta_vocab_size])
-        added_token_code_counter += len([token for token in encoding if token >= codeberta_vocab_size])
+        base_token_code_counter += len([token for token in encoding if token < vocab_size])
+        added_token_code_counter += len([token for token in encoding if token >= vocab_size])
         code_tok_counter += len(encoding)
 
     # check dead tokens
     dead_tokens = [{key: value} for key, value in tok.get_vocab().items() if len(tok.encode(tok.convert_tokens_to_string(key), add_special_tokens=False)) > 1]
-    dead_base_tokens = [token for token in dead_tokens if list(token.values())[0] < codeberta_vocab_size]
-    dead_added_tokens = [token for token in dead_tokens if list(token.values())[0] >= codeberta_vocab_size]
+    dead_base_tokens = [token for token in dead_tokens if list(token.values())[0] < vocab_size]
+    dead_added_tokens = [token for token in dead_tokens if list(token.values())[0] >= vocab_size]
 
 
     output += f"{tokenizer}: vocab_size={round(tok.vocab_size, 2)}, avg_de_tokens={round(tok_counter/(n*m), 2)}, avg_code_tokens={round(code_tok_counter/code_tokens, 2)}, " \

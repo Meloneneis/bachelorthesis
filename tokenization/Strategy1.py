@@ -1,21 +1,11 @@
 import argparse
 from datasets import load_dataset, interleave_datasets, IterableDataset
-from transformers import RobertaTokenizerFast, AutoTokenizer, AutoModelForMaskedLM, AddedToken
+from transformers import RobertaTokenizerFast, AutoTokenizer
 import json
 import shutil
 import os
 import re
 
-def remove_dead_tokens(old_tokenizer, tok):
-    dead_tokens = {key: value for key, value in tok.get_vocab().items() if
-                   len(tok.encode(tok.convert_tokens_to_string(key), add_special_tokens=False)) > 1
-                   and value < len(old_tokenizer)
-                   and "�" not in tok.convert_tokens_to_string(key)}
-    updated_vocab = tok.get_vocab()
-    value = {k: updated_vocab[k] for k in set(updated_vocab) - set(dead_tokens)}
-    value = dict(sorted(value.items(), key=lambda item: item[1]))
-    with open("vocab.json", "w", encoding="utf-8") as f:
-        json.dump(value, f, ensure_ascii=False)
 
 def preprocess_yields(yields):
     arr = []
@@ -32,11 +22,13 @@ def truncate(example):
 
 
 def get_training_corpus(args, iterable_dataset, dataset):
-    for start_idx in range(0, args.corpus_size//2, 500):
+    for start_idx in range(0, args.corpus_size//4, 252):
         arr = []
-        for i in range(500):
+        for i in range(252):
             arr.append(next(iterable_dataset)["text"])
             arr.append(dataset[start_idx + i]["text"])
+            arr.append(dataset[start_idx + i + 1]["text"])
+            arr.append(dataset[start_idx + i + 2]["text"])
         yield arr
 
 
@@ -68,8 +60,6 @@ def create_merge_files(args, corpus):
     shutil.rmtree(f"{args.output}/new_vocab_tokenizer")
     os.remove(f'{args.output}/vocab.json')
 
-    return combined_tokenizer
-
 
 def main():
     parser = argparse.ArgumentParser(description="Combine two datasets to produce a merge file")
@@ -80,8 +70,6 @@ def main():
     parser.add_argument("--output", type=str, default=".")
     parser.add_argument("--corpus_size", type=int, default=190000)
     parser.add_argument("--vocab_size", type=int, default=50000)
-    parser.add_argument("--with_java", type=bool, default=True)
-    parser.add_argument("--with_en", type=bool, default=True)
 
     args = parser.parse_args()
 
@@ -114,19 +102,13 @@ def main():
     # multilingual_dataset = interleave_datasets([oscar_en, oscar_de], probabilities=[0.6, 0.4])
     multilingual_dataset = oscar_de
 
-    dataset = interleave_datasets([java])
+    dataset = interleave_datasets([java, wiki_de, github_de], probabilities=[0.67, 0.165, 0.165])
     multilingual_dataset = multilingual_dataset.map(truncate)
 
     multilingual_dataset = iter(multilingual_dataset)
     training_corpus = get_training_corpus(args, multilingual_dataset, dataset)
-    new_tok = create_merge_files(args, training_corpus)
-    remove_dead_tokens(AutoTokenizer.from_pretrained(args.tokenizer), new_tok)
-    updated_tok = RobertaTokenizerFast(vocab_file="vocab.json",
-                                       merges_file=f"{args.output}/{args.tokenizer}_Strategy1_{args.vocab_size//1000}K/merges.txt")
-    model = AutoModelForMaskedLM(args.tokenizer)
-    if args.with_code:
-        c = AddedToken("<c>")
-        updated_tok.add_special_tokens({"additional_special_tokens": [c]})
+    create_merge_files(args, training_corpus)
+
 
 if __name__ == "__main__":
     main()

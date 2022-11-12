@@ -22,13 +22,13 @@ def truncate(example):
 
 
 def get_training_corpus(args, dataset, java):
-    for start_idx in range(0, args.corpus_size // 2, 500):
+    for start_idx in range(0, args.corpus_size // 4, 252):
         arr = []
-        for i in range(500):
+        for i in range(252):
             arr.append(next(dataset)["text"])
             arr.append(java[start_idx + i]["text"])
-            # arr.append(java[start_idx + i + 1]["text"])
-            # arr.append(java[start_idx + i + 2]["text"])
+            arr.append(java[start_idx + i + 1]["text"])
+            arr.append(java[start_idx + i + 2]["text"])
         yield arr
 
 
@@ -104,7 +104,7 @@ def main():
     parser.add_argument("--old_tokenizer", type=str, default="huggingface/CodeBERTa-small-v1")
     parser.add_argument("--language", type=str, default="de")
     parser.add_argument("--output", type=str, default=".")
-    parser.add_argument("--corpus_size", type=int, default=140000)
+    parser.add_argument("--corpus_size", type=int, default=300000)
     parser.add_argument("--vocab_size", type=int, default=10000)
 
     args = parser.parse_args()
@@ -133,7 +133,7 @@ def main():
     java = java.shuffle()
 
     # oscar_de = oscar_de.filter(lambda example: not re.search(r'(.)\1{2}', example["text"]))
-    dataset = interleave_datasets([github_de, wiki_de])  # , probabilities=[0.5, 0.25, 0.25])
+    dataset = interleave_datasets([java, github_de, wiki_de], probabilities=[0.67, 0.165, 0.165])
     oscar_de = oscar_de.map(truncate)
     oscar_de = iter(oscar_de)
     training_corpus = get_training_corpus(args, oscar_de, dataset)
